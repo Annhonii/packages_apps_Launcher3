@@ -461,7 +461,11 @@ public class DeviceProfile {
             mAllAppsProfile = getAllAppsProfile().copyWithCellHeightPx(cellHeight);
         }
 
-        mBottomSheetProfile = BottomSheetProfile.Factory.createBottomSheetProfile(
+        mAllAppsProfile = getAllAppsProfile().copyWithHorizontalSpacing(
+                mDeviceProperties.getAvailableWidthPx(),
+                LauncherPrefs.DRAWER_HORIZONTAL_SPACING.get(context) / 100f);
+
+        mBottomSheetProfile =BottomSheetProfile.Factory.createBottomSheetProfile(
                 getDeviceProperties(),
                 res,
                 mWorkspaceProfile.getEdgeMarginPx(),

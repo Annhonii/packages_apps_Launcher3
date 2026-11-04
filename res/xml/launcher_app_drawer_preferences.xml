@@ -93,4 +93,13 @@
         settings:units="%"
         android:defaultValue="100" />
 
+    <com.android.launcher3.settings.preferences.CustomSeekBarPreference
+        android:key="pref_drawer_horizontal_spacing"
+        android:title="@string/drawer_horizontal_spacing_title"
+        android:persistent="true"
+        android:max="150"
+        settings:min="50"
+        settings:units="%"
+        android:defaultValue="100" />
+
 </androidx.preference.PreferenceScreen>

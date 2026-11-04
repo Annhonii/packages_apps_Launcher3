@@ -62,6 +62,30 @@ data class AllAppsProfile(
         return copy(cellHeightPx = newCellHeightPx)
     }
 
+    /**
+     * Returns a new AllAppsProfile where the horizontal gap between two icons (cell width minus
+     * icon size) is multiplied by [factor]. The number of columns stays the same; the side padding
+     * absorbs the difference, so the grid stays centered.
+     */
+    fun copyWithHorizontalSpacing(availableWidthPx: Int, factor: Float): AllAppsProfile {
+        if (factor == 1f || numShownAllAppsColumns <= 0) return this
+
+        val contentWidth = availableWidthPx - 2 * leftRightMargin
+        val currentCellWidth = (contentWidth - padding.left - padding.right) / numShownAllAppsColumns
+        val currentGap = currentCellWidth - iconSizePx
+        if (currentGap <= 0) return this
+
+        val maxCellWidth = contentWidth / numShownAllAppsColumns
+        val newCellWidth =
+            (iconSizePx + currentGap * factor).toInt().coerceIn(iconSizePx, max(iconSizePx, maxCellWidth))
+        val newSidePadding = max(0, (contentWidth - newCellWidth * numShownAllAppsColumns) / 2)
+
+        return copy(
+            cellWidthPx = newCellWidth,
+            padding = Rect(newSidePadding, padding.top, newSidePadding, padding.bottom),
+        )
+    }
+
     companion object Factory {
 
         private fun calculateAllAppsBorderSpacePx(

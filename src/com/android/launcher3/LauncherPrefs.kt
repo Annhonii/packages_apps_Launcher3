@@ -296,6 +296,7 @@ constructor(@ApplicationContext private val encryptedContext: Context) {
         @JvmField val RECENTS_OPACITY = backedUpItem("pref_recents_opacity", 40)
         @JvmField val RECENTS_SCREENSHOT = backedUpItem("pref_recents_screenshot", true)
         @JvmField val ROW_HEIGHT = backedUpItem("pref_row_height", 100)
+        @JvmField val DRAWER_HORIZONTAL_SPACING = backedUpItem("pref_drawer_horizontal_spacing", 100)
         @JvmField val SEARCH_RADIUS_SIZE = backedUpItem("pref_search_radius_size", 100)
         @JvmField val SHORT_PARALLAX = backedUpItem("pref_short_parallax", false)
         @JvmField

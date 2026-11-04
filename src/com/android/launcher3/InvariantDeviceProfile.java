@@ -24,6 +24,7 @@ import static com.android.launcher3.LauncherPrefs.FONT_SIZE;
 import static com.android.launcher3.LauncherPrefs.ICON_SIZE;
 import static com.android.launcher3.LauncherPrefs.GRID_NAME;
 import static com.android.launcher3.LauncherPrefs.NON_FIXED_LANDSCAPE_GRID_NAME;
+import static com.android.launcher3.LauncherPrefs.DRAWER_HORIZONTAL_SPACING;
 import static com.android.launcher3.LauncherPrefs.ROW_HEIGHT;
 import static com.android.launcher3.LauncherPrefs.SHOW_DESKTOP_LABELS;
 import static com.android.launcher3.LauncherPrefs.SHOW_DRAWER_LABELS;
@@ -316,6 +317,7 @@ public class InvariantDeviceProfile {
                     FONT_SIZE.getSharedPrefKey().equals(key) ||
                     ENABLE_TWOLINE_ALLAPPS_TOGGLE.getSharedPrefKey().equals(key) ||
                     ROW_HEIGHT.getSharedPrefKey().equals(key) ||
+                    DRAWER_HORIZONTAL_SPACING.getSharedPrefKey().equals(key) ||
                     SHOW_HOTSEAT_QSB.getSharedPrefKey().equals(key)) {
                 onConfigChanged();
             }

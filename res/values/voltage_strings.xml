@@ -120,6 +120,9 @@
     <!-- Row Height -->
     <string name="row_height_title">Row height</string>
 
+    <!-- App drawer horizontal spacing -->
+    <string name="drawer_horizontal_spacing_title">Horizontal spacing</string>
+
     <!-- Hotseat Background -->
     <string name="hotseat_bg_title">Hotseat background</string>
     <string name="hotseat_bg_summary">Add translucent background to the app dock</string>
