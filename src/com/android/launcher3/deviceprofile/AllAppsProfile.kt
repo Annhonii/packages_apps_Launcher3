@@ -64,8 +64,11 @@ data class AllAppsProfile(
 
     /**
      * Returns a new AllAppsProfile where the horizontal gap between two icons (cell width minus
-     * icon size) is multiplied by [factor]. The number of columns stays the same; the side padding
-     * absorbs the difference, so the grid stays centered.
+     * icon size) is multiplied by [factor], for any number of columns. The number of columns stays
+     * the same; the side padding absorbs the difference, so the grid stays centered.
+     *
+     * If a bigger gap does not fit even with zero side padding, the icon is shrunk (down to
+     * [MIN_ICON_SCALE] of its size) to make room, so the slider always has an effect.
      */
     fun copyWithHorizontalSpacing(availableWidthPx: Int, factor: Float): AllAppsProfile {
         if (factor == 1f || numShownAllAppsColumns <= 0) return this
@@ -73,20 +76,40 @@ data class AllAppsProfile(
         val contentWidth = availableWidthPx - 2 * leftRightMargin
         val currentCellWidth = (contentWidth - padding.left - padding.right) / numShownAllAppsColumns
         val currentGap = currentCellWidth - iconSizePx
-        if (currentGap <= 0) return this
+
+        // When icons already touch each other there is no gap to shrink, but there is still a
+        // reference gap to grow from.
+        val baseGap =
+            when {
+                currentGap > 0 -> currentGap
+                factor > 1f -> iconSizePx / 4
+                else -> return this
+            }
+        val targetGap = (baseGap * factor).toInt()
 
         val maxCellWidth = contentWidth / numShownAllAppsColumns
-        val newCellWidth =
-            (iconSizePx + currentGap * factor).toInt().coerceIn(iconSizePx, max(iconSizePx, maxCellWidth))
+        var newCellWidth = iconSizePx + targetGap
+        var newIconSize = iconSizePx
+        if (newCellWidth > maxCellWidth) {
+            // Not enough room: use the full width and shrink the icon to keep the requested gap.
+            newCellWidth = maxCellWidth
+            newIconSize =
+                max((iconSizePx * MIN_ICON_SCALE).toInt(), newCellWidth - targetGap)
+                    .coerceAtMost(newCellWidth)
+        }
         val newSidePadding = max(0, (contentWidth - newCellWidth * numShownAllAppsColumns) / 2)
 
         return copy(
             cellWidthPx = newCellWidth,
+            iconSizePx = newIconSize,
             padding = Rect(newSidePadding, padding.top, newSidePadding, padding.bottom),
         )
     }
 
     companion object Factory {
+
+        /** Smallest fraction of its size an icon can shrink to when growing the horizontal gap. */
+        private const val MIN_ICON_SCALE = 0.6f
 
         private fun calculateAllAppsBorderSpacePx(
             inv: InvariantDeviceProfile,
