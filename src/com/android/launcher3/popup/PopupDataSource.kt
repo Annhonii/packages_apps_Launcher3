@@ -27,7 +27,9 @@ import com.android.launcher3.AbstractFloatingViewHelper
 import com.android.launcher3.DropTargetHandler
 import com.android.launcher3.Flags.enableHomeScreenFilesCopyPaste
 import com.android.launcher3.Flags.enableHomeScreenFilesRenaming
+import com.android.launcher3.Launcher
 import com.android.launcher3.LauncherConstants
+import com.android.launcher3.LauncherSettings.Favorites.CONTAINER_DESKTOP
 import com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_APPWIDGET
 import com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_APP_GROUP
 import com.android.launcher3.LauncherSettings.Favorites.ITEM_TYPE_CUSTOM_APPWIDGET
@@ -39,10 +41,12 @@ import com.android.launcher3.SecondaryDropTarget
 import com.android.launcher3.Utilities
 import com.android.launcher3.accessibility.LauncherAccessibilityDelegate
 import com.android.launcher3.allapps.PrivateProfileManager
+import com.android.launcher3.folder.FolderIcon
 import com.android.launcher3.homescreenfiles.HomeScreenFilesRenameDialogFactory
 import com.android.launcher3.homescreenfiles.HomeScreenFilesUtils
 import com.android.launcher3.homescreenfiles.homeScreenFile
 import com.android.launcher3.logging.StatsLogManager.LauncherEvent
+import com.android.launcher3.model.data.FolderInfo
 import com.android.launcher3.model.data.ItemInfo
 import com.android.launcher3.model.data.LauncherAppWidgetInfo
 import com.android.launcher3.model.data.WorkspaceItemInfo
@@ -76,8 +80,43 @@ object PopupDataSource {
 
 object FolderSystemShortcuts : PopupDataMapper {
 
-    override fun getPopupDataByItemInfo(itemInfo: ItemInfo): List<PopupData>? =
-        if (itemInfo.itemType == ITEM_TYPE_FOLDER) listOf(PopupDataSource.removePopupData) else null
+    // Popup data for morphing a 1x1 folder into a 2x2 "big folder".
+    private val enlargeFolderPopupData =
+        PopupData(
+            iconResId = R.drawable.ic_folder_enlarge,
+            labelResId = R.string.folder_enlarge_label,
+            category = PopupCategory.SYSTEM_SHORTCUT,
+        ) { activityContext: ActivityContext, _: ItemInfo, view: View ->
+            AbstractFloatingView.closeAllOpenViews(activityContext)
+            (view as? FolderIcon)?.let {
+                Launcher.getLauncher(view.context).workspace.setFolderBigState(it, true)
+            }
+        }
+
+    // Popup data for collapsing a 2x2 "big folder" back to a 1x1 cell.
+    private val shrinkFolderPopupData =
+        PopupData(
+            iconResId = R.drawable.ic_folder_shrink,
+            labelResId = R.string.folder_shrink_label,
+            category = PopupCategory.SYSTEM_SHORTCUT,
+        ) { activityContext: ActivityContext, _: ItemInfo, view: View ->
+            AbstractFloatingView.closeAllOpenViews(activityContext)
+            (view as? FolderIcon)?.let {
+                Launcher.getLauncher(view.context).workspace.setFolderBigState(it, false)
+            }
+        }
+
+    override fun getPopupDataByItemInfo(itemInfo: ItemInfo): List<PopupData>? {
+        if (itemInfo.itemType != ITEM_TYPE_FOLDER) return null
+        // Folders can only be enlarged on the workspace: the hotseat has a single row.
+        if (itemInfo.container != CONTAINER_DESKTOP) {
+            return listOf(PopupDataSource.removePopupData)
+        }
+        val resizeAction =
+            if (itemInfo is FolderInfo && itemInfo.isBigFolder) shrinkFolderPopupData
+            else enlargeFolderPopupData
+        return listOf(resizeAction, PopupDataSource.removePopupData)
+    }
 }
 
 object AppPairSystemShortcuts : PopupDataMapper {

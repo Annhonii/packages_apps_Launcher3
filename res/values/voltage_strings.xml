@@ -120,6 +120,11 @@
     <!-- Row Height -->
     <string name="row_height_title">Row height</string>
 
+    <!-- Big (2x2) folders -->
+    <string name="folder_enlarge_label">Enlarge folder</string>
+    <string name="folder_shrink_label">Shrink folder</string>
+    <string name="folder_enlarge_no_space">Not enough room to enlarge this folder</string>
+
     <!-- App drawer horizontal spacing -->
     <string name="drawer_horizontal_spacing_title">Horizontal spacing</string>
 

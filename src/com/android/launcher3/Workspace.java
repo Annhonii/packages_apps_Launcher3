@@ -1972,7 +1972,9 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                     dragOptions.preDragEndScale = (float) mAllAppsIconSize / btv.getIconSize();
                 }
             } else if (((Flags.homeScreenEditImprovements() && child instanceof Poppable)
-                    || HomeScreenFilesUtilsKt.isFileSystemItem(item))
+                    || HomeScreenFilesUtilsKt.isFileSystemItem(item)
+                    // Folders always get a long-press menu: it hosts Enlarge/Shrink.
+                    || child instanceof FolderIcon)
                     && !dragOptions.isAccessibleDrag && !dragOptions.isMouseDrag) {
                 Popup popup = mLauncher.getPopupControllerForHomeScreenItems()
                         .show(child);
@@ -3736,6 +3738,107 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
                 return false;
             }
         });
+    }
+
+    /**
+     * Switches a workspace folder between the standard 1x1 state and the enlarged 2x2 "big folder"
+     * state.
+     *
+     * <p>When enlarging, the folder first tries to grow in place into a vacant 2x2 block (extending
+     * right/down, or left/up when it sits at the edge of the grid). If there is none, neighbouring
+     * icons are shifted out of the way the same way they are when resizing a widget. When there is
+     * no way to make room, nothing changes and the user is told so.
+     *
+     * <p>The new state is persisted through the item's span columns, so it survives restarts.
+     *
+     * @return true if the folder's state was changed
+     */
+    public boolean setFolderBigState(FolderIcon icon, boolean big) {
+        if (!(icon.getTag() instanceof FolderInfo info)) return false;
+        if (info.isBigFolder() == big || info.container != CONTAINER_DESKTOP) return false;
+
+        CellLayout layout = getParentCellLayoutForView(icon);
+        if (layout == null || !(icon.getLayoutParams() instanceof CellLayoutLayoutParams lp)) {
+            return false;
+        }
+
+        final int span = big ? FolderInfo.BIG_FOLDER_SPAN : 1;
+        final int prevCellX = lp.getCellX();
+        final int prevCellY = lp.getCellY();
+        int cellX = prevCellX;
+        int cellY = prevCellY;
+        if (big) {
+            int[] origin = findOriginForBigFolder(layout, icon, cellX, cellY);
+            if (origin == null) {
+                Toast.makeText(mLauncher, R.string.folder_enlarge_no_space,
+                        Toast.LENGTH_SHORT).show();
+                return false;
+            }
+            cellX = origin[0];
+            cellY = origin[1];
+        }
+
+        layout.markCellsAsUnoccupiedForView(icon);
+        lp.setCellX(cellX);
+        lp.setCellY(cellY);
+        lp.setTmpCellX(cellX);
+        lp.setTmpCellY(cellY);
+        lp.cellHSpan = span;
+        lp.cellVSpan = span;
+        layout.markCellsAsOccupiedForView(icon);
+
+        info.spanX = span;
+        info.spanY = span;
+        mLauncher.getModelWriter().modifyItemInDatabase(info, info.container,
+                getCellLayoutId(layout), cellX, cellY, span, span);
+
+        // Let the icon re-layout and morph from its previous footprint.
+        icon.onBigFolderStateChanged(big, /* animate= */ true,
+                /* shiftCellsX= */ big ? prevCellX - cellX : 0,
+                /* shiftCellsY= */ big ? prevCellY - cellY : 0);
+        layout.getShortcutsAndWidgets().requestLayout();
+        return true;
+    }
+
+    /**
+     * Finds the top-left cell for a 2x2 folder that currently is a 1x1 folder at ({@code cellX},
+     * {@code cellY}). Prefers a spot that is already vacant; otherwise makes room by moving other
+     * icons. Returns null if no spot can be created.
+     */
+    @Nullable
+    private int[] findOriginForBigFolder(CellLayout layout, FolderIcon icon, int cellX,
+            int cellY) {
+        final int span = FolderInfo.BIG_FOLDER_SPAN;
+        // Try growing right/down first, then toward the left/top for folders at the edge.
+        final int[][] candidates = {
+                {cellX, cellY}, {cellX - 1, cellY}, {cellX, cellY - 1}, {cellX - 1, cellY - 1}};
+        final boolean[] valid = new boolean[candidates.length];
+        for (int i = 0; i < candidates.length; i++) {
+            valid[i] = candidates[i][0] >= 0 && candidates[i][1] >= 0
+                    && candidates[i][0] + span <= layout.getCountX()
+                    && candidates[i][1] + span <= layout.getCountY();
+        }
+
+        // Pass 1: a block that is already free (the folder's own cell does not count as occupied).
+        layout.markCellsAsUnoccupiedForView(icon);
+        int[] vacant = null;
+        for (int i = 0; i < candidates.length && vacant == null; i++) {
+            if (valid[i] && layout.isRegionVacant(
+                    candidates[i][0], candidates[i][1], span, span)) {
+                vacant = candidates[i];
+            }
+        }
+        layout.markCellsAsOccupiedForView(icon);
+        if (vacant != null) return vacant;
+
+        // Pass 2: shift neighbouring icons out of the way, like widget resizing does.
+        for (int i = 0; i < candidates.length; i++) {
+            if (valid[i] && layout.createAreaForResize(candidates[i][0], candidates[i][1], span,
+                    span, icon, new int[]{0, 0}, /* commit= */ true)) {
+                return candidates[i];
+            }
+        }
+        return null;
     }
 
     /**

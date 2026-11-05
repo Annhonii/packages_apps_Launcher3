@@ -91,8 +91,22 @@ public class FolderInfo extends CollectionInfo {
      */
     private final ArrayList<ItemInfo> contents = new ArrayList<>();
 
+    /** Span (in cells, both axes) of a folder in its enlarged ("big folder") state. */
+    public static final int BIG_FOLDER_SPAN = 2;
+
     public FolderInfo() {
         itemType = LauncherSettings.Favorites.ITEM_TYPE_FOLDER;
+    }
+
+    /**
+     * Returns true if this folder is in the enlarged state, i.e. it occupies a
+     * {@link #BIG_FOLDER_SPAN} x {@link #BIG_FOLDER_SPAN} block of workspace cells. The state is
+     * persisted through the regular {@code spanX}/{@code spanY} database columns, so it survives
+     * launcher restarts without any schema change.
+     */
+    public boolean isBigFolder() {
+        return container == LauncherSettings.Favorites.CONTAINER_DESKTOP
+                && spanX == BIG_FOLDER_SPAN && spanY == BIG_FOLDER_SPAN;
     }
 
     @Override

@@ -134,6 +134,8 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
     FolderGridOrganizer mPreviewVerifier;
     final ClippedFolderIconLayoutRule mPreviewLayoutRule;
     private final PreviewItemManager mPreviewItemManager;
+    /** Handles the enlarged (2x2) state of this folder. */
+    private final BigFolderController mBigFolder;
     private PreviewItemDrawingParams mTmpParams = new PreviewItemDrawingParams(0, 0, 0);
     private final List<ItemInfo> mCurrentPreviewItems = new ArrayList<>();
 
@@ -187,6 +189,7 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
         }, this::shouldIgnoreTouchDown);
         mPreviewLayoutRule = new ClippedFolderIconLayoutRule();
         mPreviewItemManager = new PreviewItemManager(this);
+        mBigFolder = new BigFolderController(this);
         mDotParams = new DotRenderer.DrawParams();
         mDotParams.setDotColor(Themes.getAttrColor(context, R.attr.notificationDotColor));
         mDotParams.shapeInfo = ThemeManager.INSTANCE.get(context).getIconState().getIconShapeInfo();
@@ -260,7 +263,37 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
         icon.mPreviewVerifier.setFolderInfo(folderInfo);
         icon.updatePreviewItems(false);
 
+        // Restore the enlarged state that was persisted in the item's span.
+        icon.mBigFolder.setActive(folderInfo.isBigFolder());
+
         return icon;
+    }
+
+    /** Returns true if this folder is currently shown in its enlarged (2x2) state. */
+    public boolean isBigFolder() {
+        return mBigFolder.isActive();
+    }
+
+    /**
+     * Called by the workspace after the folder's spans were changed to/from 2x2: switches the
+     * rendering and, if requested, morphs from the previous footprint with a spring.
+     *
+     * @param shiftCellsX how many cells the folder's left edge moved to the left when enlarging
+     * @param shiftCellsY how many cells the folder's top edge moved up when enlarging
+     */
+    public void onBigFolderStateChanged(boolean big, boolean animate, int shiftCellsX,
+            int shiftCellsY) {
+        mBigFolder.setActive(big);
+        if (animate) {
+            mBigFolder.playMorph(big, shiftCellsX, shiftCellsY);
+        }
+    }
+
+    /** Applies the 2x2 container geometry to the preview background. See PreviewItemManager. */
+    void applyBigFolderGeometry() {
+        if (mBigFolder.isActive()) {
+            mBigFolder.applyToBackground(mBackground);
+        }
     }
 
     public void animateBgShadowAndStroke() {
@@ -602,6 +635,7 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
     @Override
     public void setIconVisible(boolean visible) {
         mBackgroundIsVisible = visible;
+        mBigFolder.onIconVisibilityChanged(visible);
         invalidate();
     }
 
@@ -619,6 +653,10 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
 
     @Override
     protected void dispatchDraw(Canvas canvas) {
+        if (mBigFolder.isActive()) {
+            dispatchDrawBigFolder(canvas);
+            return;
+        }
         // Draw selection highlight before super.dispatchDraw() so that it appears behind the title
         // text.
         if (isSelected()) {
@@ -645,18 +683,43 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
         drawDot(canvas);
     }
 
+    /**
+     * Draws the enlarged (2x2) folder: the container, then the slot views (drawn by the
+     * ViewGroup) and the overflow preview on top, then the notification dot.
+     */
+    private void dispatchDrawBigFolder(Canvas canvas) {
+        if (isSelected()) {
+            drawWorkspaceItemSelectionHighlight(canvas, this);
+        }
+        if (mBackgroundIsVisible) {
+            mBigFolder.drawBackground(canvas);
+        }
+        // Draws the title and the slot views.
+        super.dispatchDraw(canvas);
+        if (!mBackgroundIsVisible) return;
+
+        mBigFolder.drawOverflowPreview(canvas);
+        drawDot(canvas);
+    }
+
     public void drawDot(Canvas canvas) {
         if (!mForceHideDot && ((mDotInfo != null && mDotInfo.hasDot()) || mDotScale > 0)) {
             Rect iconBounds = mDotParams.iconBounds;
-            // FolderIcon draws the icon to be top-aligned (with padding) & horizontally-centered
-            int iconSize = mActivity.getDeviceProfile().getWorkspaceProfile().getIconSizePx();
-            iconBounds.left = (getWidth() - iconSize) / 2;
-            iconBounds.right = iconBounds.left + iconSize;
-            iconBounds.top = getPaddingTop();
-            iconBounds.bottom = iconBounds.top + iconSize;
+            if (mBigFolder.isActive()) {
+                // The dot sits on the corner of the big container itself.
+                mBigFolder.getContainerBounds(iconBounds);
+            } else {
+                // FolderIcon draws the icon to be top-aligned (with padding) &
+                // horizontally-centered
+                int iconSize = mActivity.getDeviceProfile().getWorkspaceProfile().getIconSizePx();
+                iconBounds.left = (getWidth() - iconSize) / 2;
+                iconBounds.right = iconBounds.left + iconSize;
+                iconBounds.top = getPaddingTop();
+                iconBounds.bottom = iconBounds.top + iconSize;
 
-            float iconScale = (float) mBackground.previewSize / iconSize;
-            Utilities.scaleRectAboutCenter(iconBounds, iconScale);
+                float iconScale = (float) mBackground.previewSize / iconSize;
+                Utilities.scaleRectAboutCenter(iconBounds, iconScale);
+            }
 
             // If we are animating to the accepting state, animate the dot out.
             mDotParams.scale = Math.max(0, mDotScale - mBackground.getAcceptScaleProgress());
@@ -666,6 +729,14 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        if (mBigFolder.isActive()) {
+            // The 2x2 container is centered in the whole 2x2 footprint, so no top padding.
+            setPadding(getPaddingLeft(), 0, getPaddingRight(), getPaddingBottom());
+            mBigFolder.onBeforeMeasure(MeasureSpec.getSize(widthMeasureSpec),
+                    MeasureSpec.getSize(heightMeasureSpec));
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            return;
+        }
         boolean shouldShowLabel = mFolderName.shouldShowLabel();
         boolean shouldCenterIcon = mActivity.getDeviceProfile().getWorkspaceProfile()
                 .getIconCenterVertically();
@@ -678,6 +749,14 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
                     - cellHeightPx) / 2, getPaddingRight(), getPaddingBottom());
         }
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        if (mBigFolder.isActive()) {
+            mBigFolder.onLayoutSlots();
+        }
     }
 
     /** Sets the visibility of the icon's title text */
@@ -719,9 +798,11 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
      */
     public void updatePreviewItems(Predicate<ItemInfo> itemCheck) {
         mPreviewItemManager.updatePreviewItems(itemCheck);
+        mBigFolder.onContentsChanged();
     }
 
     public void onItemsChanged(boolean animate) {
+        mBigFolder.onContentsChanged();
         updatePreviewItems(false);
         updateDotInfo();
         setContentDescription(getAccessiblityTitle(mInfo.title));

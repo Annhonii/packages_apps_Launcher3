@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icon for the "Shrink folder" long-press action: arrows pointing inwards. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportHeight="24.0"
+    android:viewportWidth="24.0"
+    android:tint="@color/materialColorOnSurface">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M19.59,3L21,4.41L16.41,9H20v2h-7V4h2v3.59L19.59,3zM4.41,21L3,19.59L7.59,15H4v-2h7v7H9v-3.59L4.41,21z" />
+</vector>

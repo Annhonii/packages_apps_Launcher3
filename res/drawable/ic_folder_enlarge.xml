@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icon for the "Enlarge folder" long-press action: a small square growing into a big one. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportHeight="24.0"
+    android:viewportWidth="24.0"
+    android:tint="@color/materialColorOnSurface">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M21,3h-6v2h3.59L13,10.59L14.41,12L20,6.41V10h2V3H21zM3,21h6v-2H5.41L11,13.41L9.59,12L4,17.59V14H2v7H3z" />
+</vector>
