@@ -43,10 +43,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Implements the enlarged ("big") 2x2 state of a workspace {@link FolderIcon}.
+ * Implements the enlarged states of a workspace {@link FolderIcon}: "big" (2x2 cells, 3x3 icon
+ * grid) and "wide" (3x1 cells, a single row of 3 icons).
  *
- * <p>In this state the folder occupies a 2x2 block of workspace cells and renders a 3x3 grid of
- * app icons inside a rounded container:
+ * <p>In these states the folder renders a grid of app icons inside a rounded container. The
+ * description below uses the 3x3 grid; the wide folder works the same with 3 slots, of which the
+ * last one is the overflow preview when the folder has more than 3 apps:
  * <ul>
  *   <li>Grid slots 1-8 are real {@link BubbleTextView}s. Tapping one launches the app directly
  *       through the regular item click handler, so launch animations, work-profile handling and
@@ -63,11 +65,9 @@ import java.util.List;
  */
 class BigFolderController {
 
-    /** The container holds a GRID x GRID mini grid. */
+    /** The big (2x2) container holds a GRID x GRID mini grid; the wide one GRID x 1. */
     static final int GRID = 3;
-    private static final int SLOT_COUNT = GRID * GRID;
-    /** Slots with an index below this always show an app that launches directly. */
-    private static final int DIRECT_LAUNCH_SLOTS = SLOT_COUNT - 1;
+    private static final int MAX_SLOT_COUNT = GRID * GRID;
     /** Number of apps previewed in the 9th slot when the folder overflows. */
     private static final int OVERFLOW_PREVIEW_COUNT = 4;
 
@@ -83,8 +83,6 @@ class BigFolderController {
     // Morph spring, shared with the folder open/close spring.
     private static final float MORPH_STIFFNESS = 380f;
     private static final float MORPH_DAMPING_RATIO = 0.8f;
-    private static final float MORPH_ENLARGE_START_SCALE = 0.5f;
-    private static final float MORPH_SHRINK_START_SCALE = 2f;
 
     private final FolderIcon mIcon;
 
@@ -94,9 +92,11 @@ class BigFolderController {
     private final ArrayList<FastBitmapDrawable> mOverflowIcons = new ArrayList<>();
 
     private final RectF mContainer = new RectF();
-    private final RectF[] mSlotRects = new RectF[SLOT_COUNT];
+    private final RectF[] mSlotRects = new RectF[MAX_SLOT_COUNT];
     private final RectF mTmpRect = new RectF();
     private int mLabelTop;
+    private int mCols = GRID;
+    private int mRows = GRID;
     private boolean mHasOverflowPreview;
 
     private final Paint mFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -109,7 +109,7 @@ class BigFolderController {
 
     BigFolderController(FolderIcon icon) {
         mIcon = icon;
-        for (int i = 0; i < SLOT_COUNT; i++) {
+        for (int i = 0; i < MAX_SLOT_COUNT; i++) {
             mSlotRects[i] = new RectF();
         }
         mStrokePaint.setStyle(Paint.Style.STROKE);
@@ -126,11 +126,22 @@ class BigFolderController {
     // State
     // ---------------------------------------------------------------------------------------
 
-    /** Enters or leaves the big state without animating. */
+    private int slotCount() {
+        return mCols * mRows;
+    }
+
+    /** Picks the grid for the folder's current spans: 3x1 for the wide folder, else 3x3. */
+    private void updateGrid() {
+        mCols = GRID;
+        mRows = mIcon.mInfo.isWideFolder() ? 1 : GRID;
+    }
+
+    /** Enters or leaves the big state, or switches between big and wide, without animating. */
     void setActive(boolean active) {
         cancelMorph();
         mActive = active;
         if (active) {
+            updateGrid();
             rebuildSlots();
         } else {
             clearSlots();
@@ -170,16 +181,18 @@ class BigFolderController {
         final Context context = mIcon.getContext();
         final List<WorkspaceItemInfo> apps = mIcon.mInfo.getAppContents();
         final int total = apps.size();
-        // Up to 9 apps all launch directly. Beyond that the 9th slot becomes the overflow preview.
-        final int directCount = total <= SLOT_COUNT ? total : DIRECT_LAUNCH_SLOTS;
+        final int slotCount = slotCount();
+        final int lastSlot = slotCount - 1;
+        // Apps that fit all launch directly. Beyond that the last slot becomes the overflow preview.
+        final int directCount = total <= slotCount ? total : lastSlot;
 
         for (int i = 0; i < directCount; i++) {
             mSlotViews.add(createSlotView(context, apps.get(i)));
         }
-        mHasOverflowPreview = total > SLOT_COUNT;
+        mHasOverflowPreview = total > slotCount;
         if (mHasOverflowPreview) {
-            final int end = Math.min(total, DIRECT_LAUNCH_SLOTS + OVERFLOW_PREVIEW_COUNT);
-            for (int i = DIRECT_LAUNCH_SLOTS; i < end; i++) {
+            final int end = Math.min(total, lastSlot + OVERFLOW_PREVIEW_COUNT);
+            for (int i = lastSlot; i < end; i++) {
                 mOverflowIcons.add(apps.get(i).newIcon(context, FLAG_THEMED));
             }
         }
@@ -230,26 +243,34 @@ class BigFolderController {
         }
         final float labelBlock = labelHeight > 0 ? labelHeight + gap : 0;
 
-        // The container is a square; the title sits below it, and the pair is centered vertically.
-        final float side = Math.max(0, Math.min(width - 2 * inset,
-                height - labelBlock - 2 * inset));
-        final float left = (width - side) / 2f;
-        final float top = (height - (side + labelBlock)) / 2f;
-        mContainer.set(left, top, left + side, top + side);
-        mLabelTop = Math.round(top + side + gap);
+        final boolean wide = mRows == 1;
+        // The title sits below the container, and the pair is centered vertically. The big
+        // container is a square; the wide one fills the whole width of the 3x1 footprint.
+        final float availH = Math.max(0, height - labelBlock - 2 * inset);
+        final float availW = Math.max(0, width - 2 * inset);
+        final float w = wide ? availW : Math.min(availW, availH);
+        final float h = wide ? availH : w;
+        final float left = (width - w) / 2f;
+        final float top = (height - (h + labelBlock)) / 2f;
+        mContainer.set(left, top, left + w, top + h);
+        mLabelTop = Math.round(top + h + gap);
 
         final boolean rtl = Utilities.isRtl(mIcon.getResources());
-        final float pad = side * INNER_PADDING_FRACTION;
-        final float slot = (side - 2 * pad) / GRID;
-        for (int i = 0; i < SLOT_COUNT; i++) {
-            int row = i / GRID;
-            int col = i % GRID;
+        final float pad = Math.min(w, h) * INNER_PADDING_FRACTION;
+        final float stepX = (w - 2 * pad) / mCols;
+        final float stepY = (h - 2 * pad) / mRows;
+        // Slots are squares centered in their grid cell.
+        final float slot = Math.min(stepX, stepY);
+        final int count = slotCount();
+        for (int i = 0; i < count; i++) {
+            int row = i / mCols;
+            int col = i % mCols;
             if (rtl) {
-                col = GRID - 1 - col;
+                col = mCols - 1 - col;
             }
-            final float x = left + pad + col * slot;
-            final float y = top + pad + row * slot;
-            mSlotRects[i].set(x, y, x + slot, y + slot);
+            final float cx = left + pad + (col + 0.5f) * stepX;
+            final float cy = top + pad + (row + 0.5f) * stepY;
+            mSlotRects[i].set(cx - slot / 2f, cy - slot / 2f, cx + slot / 2f, cy + slot / 2f);
         }
     }
 
@@ -295,9 +316,11 @@ class BigFolderController {
         if (mContainer.isEmpty()) {
             computeGeometry(mIcon.getMeasuredWidth(), mIcon.getMeasuredHeight());
         }
-        background.previewSize = Math.round(mContainer.width());
-        background.basePreviewOffsetX = Math.round(mContainer.left);
-        background.basePreviewOffsetY = Math.round(mContainer.top);
+        // The background is square: for the wide folder use the container's height, centered.
+        final float size = Math.min(mContainer.width(), mContainer.height());
+        background.previewSize = Math.round(size);
+        background.basePreviewOffsetX = Math.round(mContainer.centerX() - size / 2f);
+        background.basePreviewOffsetY = Math.round(mContainer.centerY() - size / 2f);
     }
 
     /** Fills {@code out} with the container bounds in the FolderIcon's coordinates. */
@@ -312,17 +335,19 @@ class BigFolderController {
     /** Draws the container behind the slot views. */
     void drawBackground(Canvas canvas) {
         refreshColors();
-        final float radius = CORNER_RADIUS_DP * mIcon.getResources().getDisplayMetrics().density;
+        final float radius = Math.min(
+                CORNER_RADIUS_DP * mIcon.getResources().getDisplayMetrics().density,
+                Math.min(mContainer.width(), mContainer.height()) / 2f);
         canvas.drawRoundRect(mContainer, radius, radius, mFillPaint);
         canvas.drawRoundRect(mContainer, radius, radius, mStrokePaint);
     }
 
-    /** Draws the overflow preview (2x2 mini grid) in the 9th slot, on top of the slot views. */
+    /** Draws the overflow preview (2x2 mini grid) in the last slot, on top of the slot views. */
     void drawOverflowPreview(Canvas canvas) {
         if (!mHasOverflowPreview || mOverflowIcons.isEmpty()) {
             return;
         }
-        final RectF slot = mSlotRects[SLOT_COUNT - 1];
+        final RectF slot = mSlotRects[slotCount() - 1];
         final float cornerRadius = slot.width() * 0.22f;
         canvas.drawRoundRect(slot, cornerRadius, cornerRadius, mOverflowPaint);
 
@@ -361,14 +386,16 @@ class BigFolderController {
     // ---------------------------------------------------------------------------------------
 
     /**
-     * Plays the shared-bounds morph between the 1x1 and 2x2 footprints with a spring. The view has
-     * already been given its new size; we scale it from the previous footprint to its final size.
+     * Plays the shared-bounds morph from the previous footprint to the current one with a spring.
+     * The view has already been given its new size; we scale it from the previous footprint (per
+     * axis) to its final size.
      *
-     * @param toBig true when going 1x1 -> 2x2
-     * @param shiftCellsX how many cells the folder's left edge moved to the left (0 or 1)
-     * @param shiftCellsY how many cells the folder's top edge moved up (0 or 1)
+     * @param prevSpanX column span before the change
+     * @param prevSpanY row span before the change
+     * @param shiftCellsX how many cells the folder's left edge moved to the left
+     * @param shiftCellsY how many cells the folder's top edge moved up
      */
-    void playMorph(boolean toBig, int shiftCellsX, int shiftCellsY) {
+    void playMorph(int prevSpanX, int prevSpanY, int shiftCellsX, int shiftCellsY) {
         cancelMorph();
         final int token = ++mMorphToken;
         mIcon.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
@@ -380,7 +407,7 @@ class BigFolderController {
                 }
                 // Skip if the state changed again before this first frame.
                 if (token == mMorphToken) {
-                    startMorph(toBig, shiftCellsX, shiftCellsY);
+                    startMorph(prevSpanX, prevSpanY, shiftCellsX, shiftCellsY);
                 }
                 return true;
             }
@@ -388,29 +415,44 @@ class BigFolderController {
         mIcon.invalidate();
     }
 
-    private void startMorph(boolean toBig, int shiftCellsX, int shiftCellsY) {
+    /** Returns the pivot that maps the new bounds' edge onto the old footprint's edge. */
+    private static float morphPivot(float startScale, float offsetPx) {
+        return Math.abs(1f - startScale) < 0.001f ? 0f : offsetPx / (1f - startScale);
+    }
+
+    private void startMorph(int prevSpanX, int prevSpanY, int shiftCellsX, int shiftCellsY) {
         final int width = mIcon.getWidth();
         final int height = mIcon.getHeight();
+        final int spanX = Math.max(1, mIcon.mInfo.spanX);
+        final int spanY = Math.max(1, mIcon.mInfo.spanY);
         if (width == 0 || height == 0) {
             return;
         }
-        final float startScale = toBig ? MORPH_ENLARGE_START_SCALE : MORPH_SHRINK_START_SCALE;
-        // Growing: the old 1x1 footprint sits at an offset inside the new 2x2 bounds, so scale
-        // around its corner. Shrinking: the new 1x1 bounds are the old footprint's top-left cell.
-        mIcon.setPivotX(toBig ? shiftCellsX * width / 2f : 0f);
-        mIcon.setPivotY(toBig ? shiftCellsY * height / 2f : 0f);
-        mIcon.setScaleX(startScale);
-        mIcon.setScaleY(startScale);
+        final float startScaleX = (float) prevSpanX / spanX;
+        final float startScaleY = (float) prevSpanY / spanY;
+        // Start with the view covering exactly the previous footprint: the old footprint sits at
+        // an offset (the shift) inside the new bounds, so scale around the matching pivot.
+        mIcon.setPivotX(morphPivot(startScaleX, shiftCellsX * (float) width / spanX));
+        mIcon.setPivotY(morphPivot(startScaleY, shiftCellsY * (float) height / spanY));
+        mIcon.setScaleX(startScaleX);
+        mIcon.setScaleY(startScaleY);
 
         mSpringX = createMorphSpring(DynamicAnimation.SCALE_X);
         mSpringY = createMorphSpring(DynamicAnimation.SCALE_Y);
-        mSpringX.setStartValue(startScale);
-        mSpringY.setStartValue(startScale);
-        mSpringX.addEndListener((animation, canceled, value, velocity) -> {
-            mIcon.setScaleX(1f);
-            mIcon.setScaleY(1f);
-            mIcon.resetPivot();
-        });
+        mSpringX.setStartValue(startScaleX);
+        mSpringY.setStartValue(startScaleY);
+        final DynamicAnimation.OnAnimationEndListener endListener =
+                (animation, canceled, value, velocity) -> {
+                    if ((mSpringX != null && mSpringX.isRunning())
+                            || (mSpringY != null && mSpringY.isRunning())) {
+                        return;
+                    }
+                    mIcon.setScaleX(1f);
+                    mIcon.setScaleY(1f);
+                    mIcon.resetPivot();
+                };
+        mSpringX.addEndListener(endListener);
+        mSpringY.addEndListener(endListener);
         mSpringX.start();
         mSpringY.start();
     }

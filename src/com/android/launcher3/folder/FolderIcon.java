@@ -275,17 +275,19 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
     }
 
     /**
-     * Called by the workspace after the folder's spans were changed to/from 2x2: switches the
-     * rendering and, if requested, morphs from the previous footprint with a spring.
+     * Called by the workspace after the folder's spans were changed (1x1, 2x2 or 3x1): switches
+     * the rendering and, if requested, morphs from the previous footprint with a spring.
      *
-     * @param shiftCellsX how many cells the folder's left edge moved to the left when enlarging
-     * @param shiftCellsY how many cells the folder's top edge moved up when enlarging
+     * @param prevSpanX the column span before the change
+     * @param prevSpanY the row span before the change
+     * @param shiftCellsX how many cells the folder's left edge moved to the left
+     * @param shiftCellsY how many cells the folder's top edge moved up
      */
-    public void onBigFolderStateChanged(boolean big, boolean animate, int shiftCellsX,
-            int shiftCellsY) {
-        mBigFolder.setActive(big);
+    public void onFolderSizeChanged(boolean animate, int prevSpanX, int prevSpanY,
+            int shiftCellsX, int shiftCellsY) {
+        mBigFolder.setActive(mInfo.isBigFolder());
         if (animate) {
-            mBigFolder.playMorph(big, shiftCellsX, shiftCellsY);
+            mBigFolder.playMorph(prevSpanX, prevSpanY, shiftCellsX, shiftCellsY);
         }
     }
 

@@ -94,6 +94,9 @@ public class FolderInfo extends CollectionInfo {
     /** Span (in cells, both axes) of a folder in its enlarged ("big folder") state. */
     public static final int BIG_FOLDER_SPAN = 2;
 
+    /** Number of workspace columns a wide (3x1) folder spans. Its row span is 1. */
+    public static final int WIDE_FOLDER_SPAN_X = 3;
+
     public FolderInfo() {
         itemType = LauncherSettings.Favorites.ITEM_TYPE_FOLDER;
     }
@@ -105,8 +108,19 @@ public class FolderInfo extends CollectionInfo {
      * launcher restarts without any schema change.
      */
     public boolean isBigFolder() {
+        return isSquareBigFolder() || isWideFolder();
+    }
+
+    /** Returns true if this folder is on the workspace in the 2x2 state. */
+    public boolean isSquareBigFolder() {
         return container == LauncherSettings.Favorites.CONTAINER_DESKTOP
                 && spanX == BIG_FOLDER_SPAN && spanY == BIG_FOLDER_SPAN;
+    }
+
+    /** Returns true if this folder is on the workspace in the single-row 3x1 state. */
+    public boolean isWideFolder() {
+        return container == LauncherSettings.Favorites.CONTAINER_DESKTOP
+                && spanX == WIDE_FOLDER_SPAN_X && spanY == 1;
     }
 
     @Override

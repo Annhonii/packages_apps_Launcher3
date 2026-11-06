@@ -80,42 +80,54 @@ object PopupDataSource {
 
 object FolderSystemShortcuts : PopupDataMapper {
 
-    // Popup data for morphing a 1x1 folder into a 2x2 "big folder".
-    private val enlargeFolderPopupData =
+    private fun resizePopupData(iconResId: Int, labelResId: Int, spanX: Int, spanY: Int) =
         PopupData(
-            iconResId = R.drawable.ic_folder_enlarge,
-            labelResId = R.string.folder_enlarge_label,
+            iconResId = iconResId,
+            labelResId = labelResId,
             category = PopupCategory.SYSTEM_SHORTCUT,
         ) { activityContext: ActivityContext, _: ItemInfo, view: View ->
             AbstractFloatingView.closeAllOpenViews(activityContext)
             (view as? FolderIcon)?.let {
-                Launcher.getLauncher(view.context).workspace.setFolderBigState(it, true)
+                Launcher.getLauncher(view.context).workspace.setFolderSize(it, spanX, spanY)
             }
         }
 
-    // Popup data for collapsing a 2x2 "big folder" back to a 1x1 cell.
+    // Popup data for morphing a folder into a 2x2 "big folder".
+    private val enlargeFolderPopupData =
+        resizePopupData(
+            R.drawable.ic_folder_enlarge,
+            R.string.folder_enlarge_label,
+            FolderInfo.BIG_FOLDER_SPAN,
+            FolderInfo.BIG_FOLDER_SPAN,
+        )
+
+    // Popup data for morphing a folder into a single-row 3x1 "wide folder".
+    private val wideFolderPopupData =
+        resizePopupData(
+            R.drawable.ic_folder_wide,
+            R.string.folder_wide_label,
+            FolderInfo.WIDE_FOLDER_SPAN_X,
+            1,
+        )
+
+    // Popup data for collapsing a big or wide folder back to a 1x1 cell.
     private val shrinkFolderPopupData =
-        PopupData(
-            iconResId = R.drawable.ic_folder_shrink,
-            labelResId = R.string.folder_shrink_label,
-            category = PopupCategory.SYSTEM_SHORTCUT,
-        ) { activityContext: ActivityContext, _: ItemInfo, view: View ->
-            AbstractFloatingView.closeAllOpenViews(activityContext)
-            (view as? FolderIcon)?.let {
-                Launcher.getLauncher(view.context).workspace.setFolderBigState(it, false)
-            }
-        }
+        resizePopupData(R.drawable.ic_folder_shrink, R.string.folder_shrink_label, 1, 1)
 
     override fun getPopupDataByItemInfo(itemInfo: ItemInfo): List<PopupData>? {
         if (itemInfo.itemType != ITEM_TYPE_FOLDER) return null
-        // Folders can only be enlarged on the workspace: the hotseat has a single row.
+        // Folders can only be resized on the workspace: the hotseat has a single row.
         if (itemInfo.container != CONTAINER_DESKTOP) {
             return listOf(PopupDataSource.removePopupData)
         }
-        val resizeAction =
-            if (itemInfo is FolderInfo && itemInfo.isBigFolder) shrinkFolderPopupData
-            else enlargeFolderPopupData
-        return listOf(resizeAction, PopupDataSource.removePopupData)
+        val actions = mutableListOf<PopupData>()
+        if (itemInfo is FolderInfo) {
+            if (itemInfo.isBigFolder) actions.add(shrinkFolderPopupData)
+            if (!itemInfo.isSquareBigFolder) actions.add(enlargeFolderPopupData)
+            if (!itemInfo.isWideFolder) actions.add(wideFolderPopupData)
+        }
+        actions.add(PopupDataSource.removePopupData)
+        return actions
     }
 }
 
