@@ -43,18 +43,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Implements the enlarged states of a workspace {@link FolderIcon}: "big" (2x2 cells, 3x3 icon
- * grid) and "wide" (3x1 cells, a single row of 3 icons).
+ * Implements the enlarged states of a workspace {@link FolderIcon}: "big" (2x2 cells, a 2x2 icon
+ * grid) and "wide" (3x1 cells, a single row of 3 icons). Each slot matches one workspace cell.
  *
  * <p>In these states the folder renders a grid of app icons inside a rounded container. The
- * description below uses the 3x3 grid; the wide folder works the same with 3 slots, of which the
- * last one is the overflow preview when the folder has more than 3 apps:
+ * description below uses the 2x2 grid (4 slots); the wide folder works the same with 3 slots:
  * <ul>
- *   <li>Grid slots 1-8 are real {@link BubbleTextView}s. Tapping one launches the app directly
+ *   <li>All slots but the last are real {@link BubbleTextView}s. Tapping one launches the app directly
  *       through the regular item click handler, so launch animations, work-profile handling and
  *       disabled-app handling all behave like any other workspace icon.</li>
- *   <li>Slot 9 shows the 9th app (and launches it directly) when the folder has at most 9 apps.
- *       With more apps it shows a 2x2 mini preview of the remaining apps instead. That preview is
+ *   <li>The last slot shows the last app (and launches it directly) when the folder has no more
+ *       apps than slots. With more apps it shows a 2x2 mini preview of the remaining apps
+ *       instead. That preview is
  *       not a view: tapping it, or the container's empty background, falls through to the
  *       FolderIcon's own click, which opens the full expanded folder.</li>
  * </ul>
@@ -65,10 +65,9 @@ import java.util.List;
  */
 class BigFolderController {
 
-    /** The big (2x2) container holds a GRID x GRID mini grid; the wide one GRID x 1. */
-    static final int GRID = 3;
-    private static final int MAX_SLOT_COUNT = GRID * GRID;
-    /** Number of apps previewed in the 9th slot when the folder overflows. */
+    /** The icon grid has one slot per workspace cell: 2x2 (4 slots) or 3x1 (3 slots). */
+    private static final int MAX_SLOT_COUNT = 4;
+    /** Number of apps previewed in the last slot when the folder overflows. */
     private static final int OVERFLOW_PREVIEW_COUNT = 4;
 
     // Visual specs.
@@ -95,8 +94,8 @@ class BigFolderController {
     private final RectF[] mSlotRects = new RectF[MAX_SLOT_COUNT];
     private final RectF mTmpRect = new RectF();
     private int mLabelTop;
-    private int mCols = GRID;
-    private int mRows = GRID;
+    private int mCols = 2;
+    private int mRows = 2;
     private boolean mHasOverflowPreview;
 
     private final Paint mFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -130,10 +129,10 @@ class BigFolderController {
         return mCols * mRows;
     }
 
-    /** Picks the grid for the folder's current spans: 3x1 for the wide folder, else 3x3. */
+    /** Picks the icon grid from the folder's current spans: 2x2 for big, 3x1 for wide. */
     private void updateGrid() {
-        mCols = GRID;
-        mRows = mIcon.mInfo.isWideFolder() ? 1 : GRID;
+        mCols = Math.max(1, Math.min(MAX_SLOT_COUNT, mIcon.mInfo.spanX));
+        mRows = Math.max(1, Math.min(MAX_SLOT_COUNT / mCols, mIcon.mInfo.spanY));
     }
 
     /** Enters or leaves the big state, or switches between big and wide, without animating. */
@@ -202,7 +201,7 @@ class BigFolderController {
         BubbleTextView slot = (BubbleTextView) LayoutInflater.from(context)
                 .inflate(R.layout.app_icon, mIcon, false);
         slot.applyFromWorkspaceItem(info);
-        // Only the icon is shown: the label of every app would not fit in a 3x3 grid.
+        // Only the icon is shown: the label of every app would not fit in the slot grid.
         slot.setContainerTextVisibility(false);
         slot.setHapticFeedbackEnabled(false);
         // Direct launch: the regular click handler handles the WorkspaceItemInfo tag.
