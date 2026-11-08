@@ -44,7 +44,7 @@ import java.util.List;
 
 /**
  * Implements the enlarged states of a workspace {@link FolderIcon}: "big" (2x2 cells, a 2x2 icon
- * grid) and "wide" (3x1 cells, a single row of 3 icons). Each slot matches one workspace cell.
+ * grid), "wide" (3x1 cells, a single row of 3 icons) and "large" (3x3 cells, a 3x3 icon grid). Each slot matches one workspace cell.
  *
  * <p>In these states the folder renders a grid of app icons inside a rounded container. The
  * description below uses the 2x2 grid (4 slots); the wide folder works the same with 3 slots:
@@ -65,8 +65,11 @@ import java.util.List;
  */
 class BigFolderController {
 
-    /** The icon grid has one slot per workspace cell: 2x2 (4 slots) or 3x1 (3 slots). */
-    private static final int MAX_SLOT_COUNT = 4;
+    /**
+     * The icon grid has one slot per workspace cell: 2x2 (4 slots), 3x1 (3 slots) or 3x3 (9).
+     */
+    private static final int MAX_GRID = 3;
+    private static final int MAX_SLOT_COUNT = MAX_GRID * MAX_GRID;
     /** Number of apps previewed in the last slot when the folder overflows. */
     private static final int OVERFLOW_PREVIEW_COUNT = 4;
 
@@ -131,8 +134,8 @@ class BigFolderController {
 
     /** Picks the icon grid from the folder's current spans: 2x2 for big, 3x1 for wide. */
     private void updateGrid() {
-        mCols = Math.max(1, Math.min(MAX_SLOT_COUNT, mIcon.mInfo.spanX));
-        mRows = Math.max(1, Math.min(MAX_SLOT_COUNT / mCols, mIcon.mInfo.spanY));
+        mCols = Math.max(1, Math.min(MAX_GRID, mIcon.mInfo.spanX));
+        mRows = Math.max(1, Math.min(MAX_GRID, mIcon.mInfo.spanY));
     }
 
     /** Enters or leaves the big state, or switches between big and wide, without animating. */

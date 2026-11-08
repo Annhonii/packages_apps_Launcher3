@@ -110,6 +110,15 @@ object FolderSystemShortcuts : PopupDataMapper {
             1,
         )
 
+    // Popup data for morphing a folder into a 3x3 "large folder".
+    private val largeFolderPopupData =
+        resizePopupData(
+            R.drawable.ic_folder_large,
+            R.string.folder_large_label,
+            FolderInfo.LARGE_FOLDER_SPAN,
+            FolderInfo.LARGE_FOLDER_SPAN,
+        )
+
     // Popup data for collapsing a big or wide folder back to a 1x1 cell.
     private val shrinkFolderPopupData =
         resizePopupData(R.drawable.ic_folder_shrink, R.string.folder_shrink_label, 1, 1)
@@ -125,6 +134,7 @@ object FolderSystemShortcuts : PopupDataMapper {
             if (itemInfo.isBigFolder) actions.add(shrinkFolderPopupData)
             if (!itemInfo.isSquareBigFolder) actions.add(enlargeFolderPopupData)
             if (!itemInfo.isWideFolder) actions.add(wideFolderPopupData)
+            if (!itemInfo.isLargeFolder) actions.add(largeFolderPopupData)
         }
         actions.add(PopupDataSource.removePopupData)
         return actions

@@ -123,6 +123,7 @@
     <!-- Big (2x2) and wide (3x1) folders -->
     <string name="folder_enlarge_label">Big folder (2x2)</string>
     <string name="folder_wide_label">Wide folder (3x1)</string>
+    <string name="folder_large_label">Large folder (3x3)</string>
     <string name="folder_shrink_label">Normal size (1x1)</string>
     <string name="folder_resize_no_space">Not enough room for that folder size</string>
 
