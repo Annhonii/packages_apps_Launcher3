@@ -269,7 +269,12 @@ public class FolderIcon extends FrameLayout implements FloatingIconViewCompanion
         return icon;
     }
 
-    /** Returns true if this folder is currently shown in its enlarged (2x2) state. */
+    /** Returns the controller of the enlarged states, for the open/close animation. */
+    BigFolderController getBigFolderController() {
+        return mBigFolder;
+    }
+
+    /** Returns true if this folder is currently shown in one of its enlarged states. */
     public boolean isBigFolder() {
         return mBigFolder.isActive();
     }

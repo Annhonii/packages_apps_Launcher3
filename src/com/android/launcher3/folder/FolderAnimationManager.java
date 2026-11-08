@@ -31,6 +31,7 @@ import android.animation.TimeInterpolator;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
 import android.util.Property;
 import android.view.View;
@@ -148,6 +149,22 @@ public class FolderAnimationManager implements FolderAnimationCreator {
                 .getDescendantRectRelativeToSelf(mFolderIcon, folderIconPos);
         int scaledRadius = mPreviewBackground.getScaledRadius();
         float initialSize = (scaledRadius * 2) * scaleRelativeToDragLayer;
+        // The enlarged folders open out of their whole container, which is not always square
+        // (the wide 3x1 folder), and whose origin can differ from the background's.
+        float initialWidth = initialSize;
+        float initialHeight = initialSize;
+        float containerShiftX = 0;
+        float containerShiftY = 0;
+        if (mFolderIcon.isBigFolder()) {
+            RectF container = new RectF();
+            mFolderIcon.getBigFolderController().getContainerBoundsF(container);
+            initialWidth = container.width() * scaleRelativeToDragLayer;
+            initialHeight = container.height() * scaleRelativeToDragLayer;
+            containerShiftX = (container.left - mPreviewBackground.getOffsetX())
+                    * scaleRelativeToDragLayer;
+            containerShiftY = (container.top - mPreviewBackground.getOffsetY())
+                    * scaleRelativeToDragLayer;
+        }
 
         // Match size/scale of icons in the preview
         float previewScale = rule.scaleForItem(itemsInPreview.size(), 0);
@@ -171,7 +188,7 @@ public class FolderAnimationManager implements FolderAnimationCreator {
 
         int previewItemOffsetX = 0;
         if (Utilities.isRtl(mContext.getResources())) {
-            previewItemOffsetX = (int) (lp.width * initialScale - initialSize);
+            previewItemOffsetX = (int) (lp.width * initialScale - initialWidth);
         }
 
         final int paddingOffsetX = (int) (mContent.getPaddingLeft() * initialScale);
@@ -195,10 +212,10 @@ public class FolderAnimationManager implements FolderAnimationCreator {
 
         // Set up the reveal animation that clips the Folder.
         int totalOffsetX = paddingOffsetX + previewItemOffsetX;
-        Rect startRect = new Rect(totalOffsetX,
-                paddingOffsetY,
-                Math.round((totalOffsetX + initialSize)),
-                Math.round((paddingOffsetY + initialSize)));
+        Rect startRect = new Rect(Math.round(totalOffsetX + containerShiftX),
+                Math.round(paddingOffsetY + containerShiftY),
+                Math.round(totalOffsetX + containerShiftX + initialWidth),
+                Math.round(paddingOffsetY + containerShiftY + initialHeight));
         Rect endRect = new Rect(0, 0, lp.width, lp.height);
         float finalRadius = mFolderBackground.getCornerRadius();
 
@@ -376,6 +393,11 @@ public class FolderAnimationManager implements FolderAnimationCreator {
             int previewItemOffsetX, int previewItemOffsetY) {
         ClippedFolderIconLayoutRule rule = mFolderIcon.getLayoutRule();
         boolean isOnFirstPage = mFolder.mContent.getCurrentPage() == 0;
+        if (isOnFirstPage && mFolderIcon.isBigFolder()) {
+            addBigFolderItemAnimators(animatorSet, folderScale, previewItemOffsetX,
+                    previewItemOffsetY);
+            return;
+        }
         final List<View> itemsInPreview = getPreviewIconsOnPage(
                 isOnFirstPage ? 0 : mFolder.mContent.getCurrentPage());
         final int numItemsInPreview = itemsInPreview.size();
@@ -451,6 +473,89 @@ public class FolderAnimationManager implements FolderAnimationCreator {
                 public void onAnimationStart(Animator animation) {
                     super.onAnimationStart(animation);
                     // Necessary to initialize values here because of the start delay.
+                    if (mIsOpening) {
+                        v.setTranslationX(xDistance);
+                        v.setTranslationY(yDistance);
+                        v.setScaleX(initialScale);
+                        v.setScaleY(initialScale);
+                    }
+                }
+
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    super.onAnimationEnd(animation);
+                    v.setTranslationX(0.0f);
+                    v.setTranslationY(0.0f);
+                    v.setScaleX(1f);
+                    v.setScaleY(1f);
+                }
+            });
+        }
+    }
+
+    /**
+     * Animates the items of an enlarged folder between the slots they occupy in the closed folder
+     * and their places in the expanded folder, so the icons fly out of (and back into) the very
+     * spots the user tapped. Items use the folder's own interpolator so they move with it.
+     */
+    private void addBigFolderItemAnimators(AnimatorSet animatorSet, final float folderScale,
+            int previewItemOffsetX, int previewItemOffsetY) {
+        final BigFolderController big = mFolderIcon.getBigFolderController();
+        final List<View> items = mFolder.getItemsOnPage(0);
+        final ShortcutAndWidgetContainer cwc = mContent.getPageAt(0).getShortcutsAndWidgets();
+        final TimeInterpolator interpolator =
+                mIsOpening ? mFolderOpenInterpolator : mFolderCloseInterpolator;
+        final RectF iconRect = new RectF();
+
+        for (int i = 0; i < items.size(); ++i) {
+            final View v = items.get(i);
+            if (!big.getItemIconRect(i, iconRect)) {
+                continue;
+            }
+            CellLayoutLayoutParams vLp = (CellLayoutLayoutParams) v.getLayoutParams();
+            vLp.isLockedToGrid = true;
+            cwc.setupLp(v);
+
+            // Scale so that the icon matches the size it has in its slot.
+            final float baseIconSize = getBubbleTextView(v).getIconSize();
+            final float iconScale = iconRect.width() / baseIconSize;
+            final float initialScale = iconScale / folderScale;
+            final float finalScale = 1f;
+            final float scale = mIsOpening ? initialScale : finalScale;
+            v.setScaleX(scale);
+            v.setScaleY(scale);
+
+            // Move the center of the icon onto the center of its slot. Positions are in the
+            // folder content's coordinates, which are the icon's coordinates divided by
+            // folderScale, relative to the origin of the preview background.
+            final float targetX = (iconRect.centerX() - mPreviewBackground.getOffsetX()
+                    + previewItemOffsetX) / folderScale;
+            final float targetY = (iconRect.centerY() - mPreviewBackground.getOffsetY()
+                    + previewItemOffsetY) / folderScale;
+            final float viewCenterX = vLp.x + vLp.width / 2f;
+            final float viewCenterY = vLp.y + vLp.height / 2f;
+            // The icon sits at the top of the view, so it moves relative to the view's center
+            // (the scaling pivot) when the view is scaled.
+            final float iconCenterDy = v.getPaddingTop() + baseIconSize / 2f - vLp.height / 2f;
+            final float xDistance = targetX - viewCenterX;
+            final float yDistance = targetY - viewCenterY - iconCenterDy * initialScale;
+
+            Animator translationX = getAnimator(v, View.TRANSLATION_X, xDistance, 0f);
+            translationX.setInterpolator(interpolator);
+            play(animatorSet, translationX);
+
+            Animator translationY = getAnimator(v, View.TRANSLATION_Y, yDistance, 0f);
+            translationY.setInterpolator(interpolator);
+            play(animatorSet, translationY);
+
+            Animator scaleAnimator = getAnimator(v, getScaleProperty(), initialScale, finalScale);
+            scaleAnimator.setInterpolator(interpolator);
+            play(animatorSet, scaleAnimator);
+
+            animatorSet.addListener(new AnimatorListenerAdapter() {
+                @Override
+                public void onAnimationStart(Animator animation) {
+                    super.onAnimationStart(animation);
                     if (mIsOpening) {
                         v.setTranslationX(xDistance);
                         v.setTranslationY(yDistance);

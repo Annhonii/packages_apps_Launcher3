@@ -325,6 +325,57 @@ class BigFolderController {
         background.basePreviewOffsetY = Math.round(mContainer.centerY() - size / 2f);
     }
 
+    /** Same as {@link #getContainerBounds(Rect)} but without rounding. */
+    void getContainerBoundsF(RectF out) {
+        if (mContainer.isEmpty()) {
+            computeGeometry(mIcon.getMeasuredWidth(), mIcon.getMeasuredHeight());
+        }
+        out.set(mContainer);
+    }
+
+    /**
+     * Fills {@code out} with the rect (in the FolderIcon's coordinates) where the icon of the
+     * folder item at {@code index} is shown while the folder is closed: its slot, or its place in
+     * the overflow preview. Items beyond the preview are placed on the last preview icon. Returns
+     * false if the item is not visible at all.
+     */
+    boolean getItemIconRect(int index, RectF out) {
+        if (!mActive) {
+            return false;
+        }
+        if (mContainer.isEmpty()) {
+            computeGeometry(mIcon.getMeasuredWidth(), mIcon.getMeasuredHeight());
+        }
+        if (index < mSlotViews.size()) {
+            final RectF slot = mSlotRects[index];
+            final float half = slot.width() * SLOT_ICON_FRACTION / 2f;
+            out.set(slot.centerX() - half, slot.centerY() - half,
+                    slot.centerX() + half, slot.centerY() + half);
+            return true;
+        }
+        if (mHasOverflowPreview && !mOverflowIcons.isEmpty()) {
+            final int i = Math.min(index - (slotCount() - 1), mOverflowIcons.size() - 1);
+            getOverflowIconRect(Math.max(0, i), out);
+            return true;
+        }
+        return false;
+    }
+
+    /** Fills {@code out} with the bounds of the i-th mini icon of the overflow preview. */
+    private void getOverflowIconRect(int i, RectF out) {
+        final RectF slot = mSlotRects[slotCount() - 1];
+        final float icon = slot.width() * OVERFLOW_ICON_FRACTION;
+        final float margin = (slot.width() - 2 * icon) / 3f;
+        int row = i / 2;
+        int col = i % 2;
+        if (Utilities.isRtl(mIcon.getResources())) {
+            col = 1 - col;
+        }
+        final float x = slot.left + margin + col * (icon + margin);
+        final float y = slot.top + margin + row * (icon + margin);
+        out.set(x, y, x + icon, y + icon);
+    }
+
     /** Fills {@code out} with the container bounds in the FolderIcon's coordinates. */
     void getContainerBounds(Rect out) {
         mContainer.roundOut(out);
@@ -353,18 +404,8 @@ class BigFolderController {
         final float cornerRadius = slot.width() * 0.22f;
         canvas.drawRoundRect(slot, cornerRadius, cornerRadius, mOverflowPaint);
 
-        final float icon = slot.width() * OVERFLOW_ICON_FRACTION;
-        final float margin = (slot.width() - 2 * icon) / 3f;
-        final boolean rtl = Utilities.isRtl(mIcon.getResources());
         for (int i = 0; i < mOverflowIcons.size(); i++) {
-            int row = i / 2;
-            int col = i % 2;
-            if (rtl) {
-                col = 1 - col;
-            }
-            final float x = slot.left + margin + col * (icon + margin);
-            final float y = slot.top + margin + row * (icon + margin);
-            mTmpRect.set(x, y, x + icon, y + icon);
+            getOverflowIconRect(i, mTmpRect);
             FastBitmapDrawable drawable = mOverflowIcons.get(i);
             drawable.setBounds(Math.round(mTmpRect.left), Math.round(mTmpRect.top),
                     Math.round(mTmpRect.right), Math.round(mTmpRect.bottom));
